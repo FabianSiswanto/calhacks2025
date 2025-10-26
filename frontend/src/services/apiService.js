@@ -125,7 +125,7 @@ export const takeScreenshot = async () => {
   }
 };
 
-export const sendScreenshot = async () => {
+export const sendScreenshot = async (user_id = 'default-user', lesson_id = null, step_order = null) => {
   try {
     // Take screenshot first
     const screenshotResult = await takeScreenshot();
@@ -134,10 +134,20 @@ export const sendScreenshot = async () => {
       throw new Error(screenshotResult.error || 'Failed to take screenshot');
     }
     
-    // Send to backend /api/screenshot-event endpoint with only image
-    const response = await api.post('/screenshot', {
+    // Prepare request data
+    const requestData = {
       image: screenshotResult.data,
-    });
+    };
+    
+    // Add learning flow parameters if provided
+    if (lesson_id !== null && step_order !== null) {
+      requestData.user_id = user_id;
+      requestData.lesson_id = lesson_id;
+      requestData.step_order = step_order;
+    }
+    
+    // Send to backend /api/screenshot-event endpoint
+    const response = await api.post('/api/screenshot-event', requestData);
     
     return response;
   } catch (error) {

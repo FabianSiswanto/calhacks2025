@@ -66,7 +66,7 @@ export default async function connect() {
             let completed = false;
             while (!completed) {
                 await new Promise(r => setTimeout(r, 10000)); // Wait 10 seconds
-                const res = await sendScreenshot();
+                const res = await sendScreenshot('default-user', lesson.id, step.order);
                 if (res?.data?.completed) {
                     completed = true;
                 }
