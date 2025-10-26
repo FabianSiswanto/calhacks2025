@@ -10,6 +10,8 @@ const path = require("path");
 const { spawn } = require("child_process");
 const mouseHook = require("mac-mouse-hook");
 const { io } = require("socket.io-client");
+const https = require("https");
+const http = require("http");
 
 let mainWindow;
 let overlayWindow = null; // Track the overlay window
@@ -253,12 +255,16 @@ function triggerOverlayScreen() {
     console.log("Overlay window opened");
     
     // Open devtools automatically in development
-    if (!app.isPackaged) {
-      overlayWindow.webContents.openDevTools();
-    }
+    // if (!app.isPackaged) {
+    //   overlayWindow.webContents.openDevTools();
+    // }
 
     // Start WebSocket → IPC bridge so overlay receives messages via IPC too
     startOverlayIpcBridge();
+    
+    // Trigger learning session start when overlay is activated
+    // This sends the first step popup to the overlay
+    triggerLearningStart();
   });
 
   // Handle overlay window closed
@@ -344,6 +350,46 @@ function startOverlayIpcBridge() {
   }
 }
 
+// Trigger learning session start when overlay is activated
+function triggerLearningStart() {
+  try {
+    console.log("🎓 Triggering learning session start...");
+    
+    const options = {
+      hostname: "localhost",
+      port: 5000,
+      path: "/api/start-learning",
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    };
+
+    const req = http.request(options, (res) => {
+      let data = "";
+      res.on("data", (chunk) => {
+        data += chunk;
+      });
+      res.on("end", () => {
+        if (res.statusCode === 200) {
+          console.log("✅ Learning session started:", JSON.parse(data));
+        } else {
+          console.log("⚠️ Learning start response:", res.statusCode, data);
+        }
+      });
+    });
+
+    req.on("error", (error) => {
+      console.error("❌ Failed to trigger learning start:", error.message);
+    });
+
+    req.write(JSON.stringify({}));
+    req.end();
+  } catch (error) {
+    console.error("❌ Error triggering learning start:", error);
+  }
+}
+
 // Mouse hook functions
 function startMouseMonitoring() {
   if (isMouseHookActive) {
@@ -421,10 +467,10 @@ async function createWindow() {
 
   // Create the browser window
   mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 800,
-    minWidth: 800,
-    minHeight: 600,
+    width: 1400,
+    height: 900,
+    minWidth: 1000,
+    minHeight: 700,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,

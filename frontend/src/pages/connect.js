@@ -44,36 +44,39 @@ async function updateSupabase(table, id, data) {
     return response.ok;
 }
 
-export default async function connect() {    
-    const lessons = await fetchFromSupabase('lesson', { is_finished: false });
-    console.log('Lessons data:', lessons);
+export default async function connect() {
+    // COMMENTED OUT - Using backend-managed state instead
+    // const lessons = await fetchFromSupabase('lesson', { is_finished: false });
+    // console.log('Lessons data:', lessons);
     
-    if (!Array.isArray(lessons) || lessons.length === 0) {
-        console.log('No lessons found or lessons is not an array');
-        return;
-    }
+    // if (!Array.isArray(lessons) || lessons.length === 0) {
+    //     console.log('No lessons found or lessons is not an array');
+    //     return;
+    // }
     
-    for (const lesson of lessons) {
-        const steps = await fetchFromSupabase('step', { lesson_id: lesson.id });
-        console.log('Steps data:', steps);
+    // for (const lesson of lessons) {
+    //     const steps = await fetchFromSupabase('step', { lesson_id: lesson.id });
+    //     console.log('Steps data:', steps);
         
-        if (!Array.isArray(steps) || steps.length === 0) {
-            console.log(`No steps found for lesson ${lesson.id} or steps is not an array`);
-            continue;
-        }
+    //     if (!Array.isArray(steps) || steps.length === 0) {
+    //         console.log(`No steps found for lesson ${lesson.id} or steps is not an array`);
+    //         continue;
+    //     }
         
-        for (const step of steps) {
-            let completed = false;
-            while (!completed) {
-                await new Promise(r => setTimeout(r, 10000)); // Wait 10 seconds
-                const res = await sendScreenshot('default-user', lesson.id, step.order);
-                if (res?.data?.completed) {
-                    completed = true;
-                }
-            }
-        }
+    //     for (const step of steps) {
+    //         let completed = false;
+    //         while (!completed) {
+    //             await new Promise(r => setTimeout(r, 10000)); // Wait 10 seconds
+    //             const res = await sendScreenshot();
+    //             if (res?.data?.completed) {
+    //                 completed = true;
+    //             }
+    //         }
+    //     }
         
-        await updateSupabase('lesson', lesson.id, { is_finished: true });
-    }
+    //     await updateSupabase('lesson', lesson.id, { is_finished: true });
+    // }
+    
+    console.log('connect() called - function disabled, using backend-managed learning flow');
 }
-connect();
+// connect(); // Disabled - not auto-starting

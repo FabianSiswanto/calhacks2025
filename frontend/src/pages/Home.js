@@ -35,16 +35,76 @@ const Home = () => {
   };
 
   const lessonItems = [
-    "Understanding the Figma interface, including the toolbar, layers panel, properties panel, and how to navigate the canvas effectively.",
-    "Creating and manipulating basic shapes, using selection tools, and applying transformations like rotation, scaling, and positioning.",
-    "Working with frames and artboards to organize your designs and create responsive layouts for different screen sizes.",
-    "Mastering text tools, typography settings, and text styling to create readable and visually appealing content.",
-    "Using the pen tool and vector editing capabilities to create custom shapes, icons, and illustrations.",
-    "Applying colors, gradients, and effects like shadows, blurs, and strokes to enhance your designs.",
-    "Creating and managing components and variants to build reusable design elements and maintain consistency across projects.",
-    "Understanding auto layout to create flexible, responsive designs that automatically adjust to content changes.",
-    "Using prototyping features to connect frames, add interactions, and create clickable mockups that simulate user flows.",
-    "Collaborating with team members through commenting, sharing files, and using version history to track design changes.",
+    {
+      number: 1,
+      title: "Interface Mastery",
+      description: "Understanding the Figma interface, including the toolbar, layers panel, properties panel, and how to navigate the canvas effectively.",
+      icon: "🎨",
+      difficulty: "Beginner"
+    },
+    {
+      number: 2,
+      title: "Shape Creation",
+      description: "Creating and manipulating basic shapes, using selection tools, and applying transformations like rotation, scaling, and positioning.",
+      icon: "🔷",
+      difficulty: "Beginner"
+    },
+    {
+      number: 3,
+      title: "Frames & Layouts",
+      description: "Working with frames and artboards to organize your designs and create responsive layouts for different screen sizes.",
+      icon: "📐",
+      difficulty: "Intermediate"
+    },
+    {
+      number: 4,
+      title: "Typography",
+      description: "Mastering text tools, typography settings, and text styling to create readable and visually appealing content.",
+      icon: "✍️",
+      difficulty: "Beginner"
+    },
+    {
+      number: 5,
+      title: "Vector Tools",
+      description: "Using the pen tool and vector editing capabilities to create custom shapes, icons, and illustrations.",
+      icon: "✏️",
+      difficulty: "Intermediate"
+    },
+    {
+      number: 6,
+      title: "Colors & Effects",
+      description: "Applying colors, gradients, and effects like shadows, blurs, and strokes to enhance your designs.",
+      icon: "🌈",
+      difficulty: "Intermediate"
+    },
+    {
+      number: 7,
+      title: "Components",
+      description: "Creating and managing components and variants to build reusable design elements and maintain consistency across projects.",
+      icon: "🧩",
+      difficulty: "Advanced"
+    },
+    {
+      number: 8,
+      title: "Auto Layout",
+      description: "Understanding auto layout to create flexible, responsive designs that automatically adjust to content changes.",
+      icon: "📱",
+      difficulty: "Advanced"
+    },
+    {
+      number: 9,
+      title: "Prototyping",
+      description: "Using prototyping features to connect frames, add interactions, and create clickable mockups that simulate user flows.",
+      icon: "🔗",
+      difficulty: "Advanced"
+    },
+    {
+      number: 10,
+      title: "Collaboration",
+      description: "Collaborating with team members through commenting, sharing files, and using version history to track design changes.",
+      icon: "👥",
+      difficulty: "Intermediate"
+    }
   ];
 
   if (isSubmitted) {
@@ -64,27 +124,26 @@ const Home = () => {
                 marginBottom: 40,
                 color: "#2d2d2d",
                 fontFamily: "inherit",
+                textAlign: "center"
               }}>
               <i>Lessons to be learned...</i>
             </h2>
-            <ol
-              style={{
-                fontSize: 18,
-                lineHeight: 1.8,
-                fontFamily: "inherit",
-                color: "#2d2d2d",
-                paddingLeft: 30,
-              }}>
+            <div className="lessons-grid">
               {lessonItems.map((lesson, index) => (
-                <li
-                  key={index}
-                  style={{
-                    marginBottom: 24,
-                  }}>
-                  {lesson}
-                </li>
+                <div key={index} className="lesson-card">
+                  <div className="lesson-icon">{lesson.icon}</div>
+                  <div className="lesson-content">
+                    <div className="lesson-header">
+                      <h3 className="lesson-title">Lesson {lesson.number}: {lesson.title}</h3>
+                      <span className={`lesson-difficulty ${lesson.difficulty.toLowerCase()}`}>
+                        {lesson.difficulty}
+                      </span>
+                    </div>
+                    <p className="lesson-description">{lesson.description}</p>
+                  </div>
+                </div>
               ))}
-            </ol>
+            </div>
           </div>
         </section>
 
@@ -127,37 +186,6 @@ const Home = () => {
             }}>
             Start
           </button>
-          <button
-            onClick={handleStartLearning}
-            disabled={isRunning}
-            style={{
-              height: 72,
-              padding: "0 80px",
-              borderRadius: 40,
-              border: "none",
-              background: isRunning ? "#9ca3af" : "#10b981",
-              color: "#ffffff",
-              fontWeight: 600,
-              fontSize: 20,
-              cursor: isRunning ? "not-allowed" : "pointer",
-              boxShadow: "0 4px 12px rgba(16, 185, 129, 0.3)",
-              transition: "all 0.2s ease",
-              fontFamily: "inherit",
-            }}
-            onMouseEnter={(e) => {
-              if (!isRunning) {
-                e.target.style.background = "#059669";
-                e.target.style.transform = "scale(1.05)";
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (!isRunning) {
-                e.target.style.background = "#10b981";
-                e.target.style.transform = "scale(1)";
-              }
-            }}>
-            {isRunning ? "Learning..." : "Test Learning Flow"}
-          </button>
         </div>
       </div>
     );
@@ -169,7 +197,7 @@ const Home = () => {
         <div className="hero-background"></div>
         <div className="hero-content">
           <h1 className="hero-title">
-            Learn <i>Anything</i> Fast
+            Learn <i>Anything,</i> Fast.
           </h1>
         </div>
       </section>
