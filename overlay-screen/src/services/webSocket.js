@@ -2,12 +2,18 @@ import { io } from "socket.io-client";
 
 let socket = null;
 let listener = null;
+let mockTimers = [];
+let mockStarted = false;
 
 function deriveBaseUrl(inputUrl) {
   try {
     const u = new URL(inputUrl);
     const isWs = u.protocol === "ws:" || u.protocol === "wss:";
-    const protocol = isWs ? (u.protocol === "wss:" ? "https:" : "http:") : u.protocol;
+    const protocol = isWs
+      ? u.protocol === "wss:"
+        ? "https:"
+        : "http:"
+      : u.protocol;
     return `${protocol}//${u.host}`; // strip path; socket.io uses /socket.io
   } catch (_e) {
     return inputUrl; // fallback if malformed
@@ -21,7 +27,7 @@ export function connectWebSocket(url) {
 
   const baseUrl = deriveBaseUrl(url || "http://localhost:5000");
   console.log("🔌 Connecting to WebSocket:", baseUrl);
-  
+
   socket = io(baseUrl, {
     transports: ["polling"], // force polling to avoid websocket handshake issues with Werkzeug
     withCredentials: false,
@@ -42,6 +48,12 @@ export function connectWebSocket(url) {
     socket.emit("join_user_room", { user_id: "overlay-user" }, (response) => {
       console.log("📥 join_user_room response:", response);
     });
+
+    // Optionally start mock messages when connected
+    if (process.env.REACT_APP_WS_MOCK === "1" && !mockStarted) {
+      console.log("🧪 Starting mock WebSocket schedule (on connect)");
+      startMockMessages();
+    }
   });
 
   socket.on("disconnect", () => {
@@ -50,6 +62,11 @@ export function connectWebSocket(url) {
 
   socket.on("connect_error", (error) => {
     console.error("💥 WebSocket connection error:", error);
+    // If mocking enabled, kick off schedule even if we cannot connect
+    if (process.env.REACT_APP_WS_MOCK === "1" && !mockStarted) {
+      console.log("🧪 Starting mock WebSocket schedule (connect_error)");
+      startMockMessages();
+    }
   });
 
   // Optional connection status event from backend
@@ -99,15 +116,90 @@ export function disconnectWebSocket() {
     try {
       socket.removeAllListeners();
       socket.disconnect();
-    } catch (_e) {
-    }
+    } catch (_e) {}
     socket = null;
   }
   listener = null;
+  stopMockMessages();
+}
+
+function schedule(messages) {
+  stopMockMessages();
+  mockStarted = true;
+  mockTimers = messages.map(({ delayMs, header, body }) =>
+    setTimeout(() => {
+      if (typeof listener === "function") {
+        try {
+          listener({ header, body, raw: { header, body, mock: true } });
+        } catch (e) {
+          console.error("❌ Error in mock listener call:", e);
+        }
+      }
+    }, Math.max(0, delayMs || 0))
+  );
+}
+
+export function startMockMessages(customMessages) {
+  const defaults = [
+    {
+      delayMs: 1000,
+      header: "Welcome",
+      body: "Go to www.figma.com, click 'Get started', enter your details, and complete a quick verification activity.",
+    },
+    {
+      delayMs: 3000,
+      header: "Step 1",
+      body: "Click the 'New Project' button on the Figma dashboard.",
+    },
+    { delayMs: 6000, header: "Tip", body: "Use F to quickly create frames." },
+    {
+      delayMs: 9000,
+      header: "Step 2",
+      body: "Open the Main menu, hover over 'View', and select 'Rulers'.",
+    },
+    {
+      delayMs: 12000,
+      header: "Reminder",
+      body: "Click and drag on the canvas to create a new frame.",
+    },
+    {
+      delayMs: 15000,
+      header: "Step 3",
+      body: "Click the 'Rectangle' tool in the toolbar and click and drag on the canvas to create a new rectangle.",
+    },
+    {
+      delayMs: 1500,
+      header: "Step 4",
+      body: "Select the rectangle layer, go to the 'Arrange' menu, and select 'Align' to center the rectangle horizontally and vertically",
+    },
+    {
+      delayMs: 1500,
+      header: "Step 5",
+      body: "Use the zoom controls in the toolbar or the keyboard shortcuts to zoom in and out of the canvas",
+    },
+  ];
+  const scheduleList =
+    Array.isArray(customMessages) && customMessages.length > 0
+      ? customMessages
+      : defaults;
+  console.log("🧪 Scheduling mock messages:", scheduleList);
+  schedule(scheduleList);
+}
+
+export function stopMockMessages() {
+  if (mockTimers && mockTimers.length) {
+    try {
+      mockTimers.forEach((t) => clearTimeout(t));
+    } catch (_e) {}
+  }
+  mockTimers = [];
+  mockStarted = false;
 }
 
 export default {
   connectWebSocket,
   subscribeWebSocket,
   disconnectWebSocket,
+  startMockMessages,
+  stopMockMessages,
 };

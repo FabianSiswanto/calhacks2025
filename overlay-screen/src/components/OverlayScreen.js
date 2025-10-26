@@ -10,13 +10,16 @@ const OverlayScreen = () => {
 
   useEffect(() => {
     console.log("🚀 OverlayScreen useEffect started");
-    
+
     const url = process.env.REACT_APP_WS_URL || "ws://localhost:5000/ws";
     console.log("🔌 Connecting to WebSocket:", url);
     wsClient.connectWebSocket(url);
-    
+
     const unsubscribe = wsClient.subscribeWebSocket(({ header, body }) => {
-      console.log("🔄 OverlayScreen received WebSocket update:", { header, body });
+      console.log("🔄 OverlayScreen received WebSocket update:", {
+        header,
+        body,
+      });
       console.log("📝 Setting header to:", header);
       console.log("📝 Setting body to:", body);
       hasRealtimeRef.current = true;
@@ -31,7 +34,10 @@ const OverlayScreen = () => {
         try {
           const h = (payload && (payload.header || payload.title)) || "Step";
           const b = (payload && (payload.body || payload.message)) || "";
-          console.log("🔄 OverlayScreen received IPC update:", { header: h, body: b });
+          console.log("🔄 OverlayScreen received IPC update:", {
+            header: h,
+            body: b,
+          });
           setHeader(h);
           setBody(b);
         } catch (e) {
@@ -40,7 +46,9 @@ const OverlayScreen = () => {
       };
       window.electronAPI.onOverlaySetContent(ipcHandler);
       removeIpc = () => {
-        try { window.electronAPI.onOverlaySetContent(() => {}); } catch (_e) {}
+        try {
+          window.electronAPI.onOverlaySetContent(() => {});
+        } catch (_e) {}
       };
     }
 
