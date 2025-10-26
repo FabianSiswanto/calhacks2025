@@ -125,7 +125,7 @@ export const takeScreenshot = async () => {
   }
 };
 
-export const sendScreenshot = async (user_id = 'default-user', lesson_id = null, step_order = null) => {
+export const sendScreenshot = async (options) => {
   try {
     // Take screenshot first
     const screenshotResult = await takeScreenshot();
@@ -134,20 +134,17 @@ export const sendScreenshot = async (user_id = 'default-user', lesson_id = null,
       throw new Error(screenshotResult.error || 'Failed to take screenshot');
     }
     
-    // Prepare request data
-    const requestData = {
-      image: screenshotResult.data,
-    };
-    
-    // Add learning flow parameters if provided
-    if (lesson_id !== null && step_order !== null) {
-      requestData.user_id = user_id;
-      requestData.lesson_id = lesson_id;
-      requestData.step_order = step_order;
+    // Build payload for event-driven flow
+    const payload = { image: screenshotResult.data };
+    if (options && typeof options === 'object') {
+      const { user_id, lesson_id, step_order } = options;
+      if (user_id) payload.user_id = user_id;
+      if (lesson_id !== undefined) payload.lesson_id = lesson_id;
+      if (step_order !== undefined) payload.step_order = step_order;
     }
-    
-    // Send to backend /api/screenshot-event endpoint
-    const response = await api.post('/api/screenshot-event', requestData);
+
+    // Use event endpoint which responds quickly and manages overlay/completion
+    const response = await api.post('/api/screenshot-event', payload);
     
     return response;
   } catch (error) {

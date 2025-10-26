@@ -56,26 +56,24 @@ def _resolve_context(
 
     - user_id: defaults to DEFAULT_USER_ID
     - lesson_id: defaults to DEFAULT_LESSON_ID
-    - step_order: if missing or invalid, pick the first available step for the lesson
+    - step_order: if missing or invalid, always start with step_order = 1
     """
     resolved_user_id = user_id or DEFAULT_USER_ID
     resolved_lesson_id = lesson_id or DEFAULT_LESSON_ID
 
-    lesson_data = _ensure_lesson_loaded(resolved_lesson_id)
-    if not lesson_data:
-        # Fall back to default with empty data; step_order will be 1
-        first_step = 1
-    else:
-        # Determine first available step
-        try:
-            first_step = sorted(lesson_data.keys())[0]
-        except Exception:
-            first_step = 1
-
-    if step_order is None or (lesson_data and step_order not in lesson_data):
-        resolved_step_order = first_step
+    # Always start with step_order = 1, regardless of what's in the database
+    if step_order is None:
+        resolved_step_order = 1
     else:
         resolved_step_order = step_order
+
+    # Ensure lesson data is loaded for validation
+    lesson_data = _ensure_lesson_loaded(resolved_lesson_id)
+    
+    # If step_order 1 doesn't exist in the lesson, log a warning but still use 1
+    if lesson_data and resolved_step_order not in lesson_data:
+        logger.warning(f"Step {resolved_step_order} not found in lesson {resolved_lesson_id}. Available steps: {sorted(lesson_data.keys())}")
+        # Still use the requested step_order (which defaults to 1)
 
     # Seed/refresh in-memory user state
     state = user_state.setdefault(
@@ -131,6 +129,11 @@ def handle_screenshot_event(user_id: str, lesson_id: int, step_order: int, base6
         step_description = step_info["description"]
         finish_criteria = step_info["finish_criteria"]
 
+        # Debug output for finish criteria
+        logger.info(f"🎯 Using finish criteria for lesson {lesson_id}, step {step_order}:")
+        logger.info(f"   Description: {step_description}")
+        logger.info(f"   Finish criteria: {finish_criteria}")
+
         # If popup not yet sent for this step, generate and send it now, then return
         if not state.get("popup_sent_for_step"):
             popup_message = generate_and_send_popup_message(base64_image, step_description, user_id)
@@ -138,6 +141,7 @@ def handle_screenshot_event(user_id: str, lesson_id: int, step_order: int, base6
             return {"completed": False, "step_order": step_order}
 
         # Otherwise, check completion using this latest screenshot
+        logger.info(f"🔍 Analyzing screenshot against finish criteria: {finish_criteria}")
         completion_result = analyze_screenshot(base64_image, finish_criteria, lesson_id)
         is_completed = completion_result.strip().upper() == "YES"
         

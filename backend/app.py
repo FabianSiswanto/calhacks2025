@@ -77,6 +77,43 @@ def health():
         "service": "calhacks2025-backend"
     })
 
+@app.route('/api/start-learning', methods=['POST'])
+def start_learning():
+    """Start a learning session - sends first step popup without requiring screenshot"""
+    try:
+        from utils.learning_agent import handle_screenshot_event_with_defaults, DEFAULT_USER_ID, DEFAULT_LESSON_ID
+        from utils.learning_agent import _resolve_context, _ensure_lesson_loaded
+        
+        # Resolve defaults to get current step
+        user_id, lesson_id, step_order = _resolve_context(None, None, None)
+        
+        # Load lesson data to get step description
+        lesson_data = _ensure_lesson_loaded(lesson_id)
+        if not lesson_data or step_order not in lesson_data:
+            return jsonify({"error": "Could not load lesson data"}), 500
+        
+        step_info = lesson_data[step_order]
+        description = step_info.get("description", "")
+        
+        # Use empty image to trigger first popup
+        result = handle_screenshot_event_with_defaults(
+            base64_image="",  # Empty image for initial popup
+            user_id=None,
+            lesson_id=None,
+            step_order=None,
+        )
+        
+        return jsonify({
+            "status": "started",
+            "message": "Learning session started - first step popup sent",
+            "lesson_id": lesson_id,
+            "step_order": step_order,
+            "description": description,
+            "result": result
+        })
+    except Exception as e:
+        return jsonify({"error": f"Failed to start learning: {str(e)}"}), 500
+
 @app.route('/api/screenshot-event', methods=['POST'])
 def screenshot_event():
     """
