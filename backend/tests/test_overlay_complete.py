@@ -166,16 +166,29 @@ class TestSuite:
         print(f"📥 API Response: {response.status_code}")
         print(f"   Body: {json.dumps(response.json(), indent=6)}")
         
-        # Wait longer for message
-        time.sleep(1)
-        if self.overlay.wait_for_message(timeout=5):
+        # Wait for message and check if count increased
+        time.sleep(1.5)
+        final_count = self.overlay.get_message_count()
+        
+        if final_count > initial_count:
             latest = self.overlay.received_messages[-1]
             print(f"✅ Step message received!")
             print(f"   Header: {latest.get('header', 'N/A')}")
             print(f"   Body: {latest.get('body', 'N/A')}")
-            return True
+            
+            # Verify message structure
+            has_header = 'header' in latest
+            has_body = 'body' in latest
+            
+            if has_header and has_body:
+                return True
+            else:
+                print(f"⚠️  Message missing required fields (header: {has_header}, body: {has_body})")
+                return False
         else:
-            print(f"⚠️  Step message not received (total messages: {self.overlay.get_message_count()})")
+            print(f"⚠️  Step message not received (total messages: {final_count}, was {initial_count})")
+            if final_count > 0:
+                print(f"   Latest message: {self.overlay.received_messages[-1]}")
             return False
             
     def test_start_step_custom(self):

@@ -30,6 +30,9 @@ def start_step():
                 "body": "Follow the instructions displayed in the overlay to complete this step.",
             }
         
+        # Always emit WebSocket message when step_data is created
+        print(f"📤 Step data prepared: {step_data}")
+        
         # Get the active SocketIO instance from current_app
         socketio = current_app.extensions.get('socketio')
         print(f"📤 Sending WebSocket message to room '{user_id}': {step_data}")
