@@ -1,7 +1,7 @@
 import os
 import logging
 import time
-from typing import Dict, Optional, Union
+from typing import Dict, Optional, Union, Tuple
 from datetime import datetime
 
 from dotenv import load_dotenv
@@ -30,6 +30,10 @@ lesson_cache: Dict[int, Dict[int, Dict[str, str]]] = {}
 # user_state: { user_id: { 'lesson_id': int, 'step_order': int, 'popup_sent_for_step': bool } }
 user_state: Dict[str, Dict[str, Union[int, bool]]] = {}
 
+# Default single-user id and lesson when not provided by client
+DEFAULT_USER_ID = "overlay-user"
+DEFAULT_LESSON_ID = 32
+
 
 def _ensure_lesson_loaded(lesson_id: int) -> Optional[Dict[int, Dict[str, str]]]:
     """Load all steps for a lesson into memory if not already cached."""
@@ -41,6 +45,47 @@ def _ensure_lesson_loaded(lesson_id: int) -> Optional[Dict[int, Dict[str, str]]]
     except Exception as e:
         logger.error(f"Failed to load lesson {lesson_id}: {e}")
         return None
+
+
+def _resolve_context(
+    user_id: Optional[str],
+    lesson_id: Optional[int],
+    step_order: Optional[int]
+) -> Tuple[str, int, int]:
+    """Resolve missing context using sane defaults.
+
+    - user_id: defaults to DEFAULT_USER_ID
+    - lesson_id: defaults to DEFAULT_LESSON_ID
+    - step_order: if missing or invalid, pick the first available step for the lesson
+    """
+    resolved_user_id = user_id or DEFAULT_USER_ID
+    resolved_lesson_id = lesson_id or DEFAULT_LESSON_ID
+
+    lesson_data = _ensure_lesson_loaded(resolved_lesson_id)
+    if not lesson_data:
+        # Fall back to default with empty data; step_order will be 1
+        first_step = 1
+    else:
+        # Determine first available step
+        try:
+            first_step = sorted(lesson_data.keys())[0]
+        except Exception:
+            first_step = 1
+
+    if step_order is None or (lesson_data and step_order not in lesson_data):
+        resolved_step_order = first_step
+    else:
+        resolved_step_order = step_order
+
+    # Seed/refresh in-memory user state
+    state = user_state.setdefault(
+        resolved_user_id,
+        {"lesson_id": resolved_lesson_id, "step_order": resolved_step_order, "popup_sent_for_step": False}
+    )
+    state["lesson_id"] = resolved_lesson_id
+    state["step_order"] = resolved_step_order
+
+    return resolved_user_id, resolved_lesson_id, resolved_step_order
 
 
 def handle_screenshot_event(user_id: str, lesson_id: int, step_order: int, base64_image: str) -> Dict[str, Union[str, int]]:
@@ -112,6 +157,27 @@ def handle_screenshot_event(user_id: str, lesson_id: int, step_order: int, base6
         return {"completed": False, "step_order": step_order}
     except Exception as e:
         logger.error(f"Error in handle_screenshot_event: {e}")
+        return {"completed": False, "error": f"Internal error: {str(e)}"}
+
+
+def handle_screenshot_event_with_defaults(
+    base64_image: str,
+    user_id: Optional[str] = None,
+    lesson_id: Optional[int] = None,
+    step_order: Optional[int] = None,
+) -> Dict[str, Union[str, int]]:
+    """Wrapper that applies defaults when context is missing.
+
+    Defaults to:
+      - user_id: DEFAULT_USER_ID
+      - lesson_id: DEFAULT_LESSON_ID (32)
+      - step_order: first step for the resolved lesson
+    """
+    try:
+        resolved_user_id, resolved_lesson_id, resolved_step_order = _resolve_context(user_id, lesson_id, step_order)
+        return handle_screenshot_event(resolved_user_id, resolved_lesson_id, resolved_step_order, base64_image)
+    except Exception as e:
+        logger.error(f"Error in handle_screenshot_event_with_defaults: {e}")
         return {"completed": False, "error": f"Internal error: {str(e)}"}
 
 # Agent: Task completion decider

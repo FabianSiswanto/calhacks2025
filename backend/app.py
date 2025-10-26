@@ -6,7 +6,7 @@ from datetime import datetime
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from flask_socketio import SocketIO, emit, join_room
-from utils.learning_agent import analyze_screenshot, handle_screenshot_event
+from utils.learning_agent import analyze_screenshot, handle_screenshot_event, handle_screenshot_event_with_defaults
 
 # Add the backend directory to Python path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -102,13 +102,14 @@ def screenshot_event():
             result = handle_screenshot_event(user_id, lesson_id, step_order, base64_image)
             return jsonify(result)
 
-        # Fallback: simple analysis path (no context)
-        try:
-            analysis = analyze_screenshot(base64_image, finish_criteria="")
-            completed = str(analysis).strip().upper() == "YES"
-            return jsonify({"completed": completed})
-        except Exception as inner:
-            return jsonify({"error": f"Analysis failed: {str(inner)}"}), 500
+        # Fallback: use server defaults (single-user, default lesson/step)
+        result = handle_screenshot_event_with_defaults(
+            base64_image=base64_image,
+            user_id=data.get('user_id'),
+            lesson_id=int(data['lesson_id']) if data.get('lesson_id') is not None else None,
+            step_order=int(data['step_order']) if data.get('step_order') is not None else None,
+        )
+        return jsonify(result)
 
     except Exception as e:
         return jsonify({"error": f"Internal error: {str(e)}"}), 500
