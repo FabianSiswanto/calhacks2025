@@ -112,3 +112,5 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+frontend/package-lock.json
+package-lock.json
