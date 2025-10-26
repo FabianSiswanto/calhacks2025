@@ -201,7 +201,7 @@ def handle_join_user_room(data):
 
 if __name__ == '__main__':
     print("Starting Flask backend with WebSocket support...")
-    print("Backend will be available at: http://localhost:5000")
-    print("WebSocket endpoint: ws://localhost:5000/socket.io/")
+    print("Backend will be available at: http://localhost:5001")
+    print("WebSocket endpoint: ws://localhost:5001/socket.io/")
     # DEV ONLY: allow Werkzeug with Flask-SocketIO so the server starts
-    socketio.run(app, debug=True, port=5000, host='127.0.0.1', allow_unsafe_werkzeug=True)
+    socketio.run(app, debug=True, port=5001, host='127.0.0.1', allow_unsafe_werkzeug=True)
