@@ -1,57 +1,54 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import "./OverlayScreen.css";
 import screenshotService from "../services/screenshotService";
 import wsClient from "../services/webSocket";
-import { startStep, sendScreenshot } from "../services/apiService";
 
 const OverlayScreen = () => {
-  const [header, setHeader] = useState("Step 1");
-  const [body, setBody] = useState(
-    "Using prototyping features to connect frames, add interactions, and create clickable mockups that simulate user flows."
-  );
+  const [header, setHeader] = useState("Waiting for updates…");
+  const [body, setBody] = useState("This will update when a message arrives.");
+  const hasRealtimeRef = useRef(false);
 
   useEffect(() => {
-    if (window.electronAPI && window.electronAPI.onOverlaySetContent) {
-      window.electronAPI.onOverlaySetContent((payload) => {
-        if (payload?.header) setHeader(payload.header);
-        if (payload?.body) setBody(payload.body);
-      });
-    }
-
+    console.log("🚀 OverlayScreen useEffect started");
+    
     const url = process.env.REACT_APP_WS_URL || "ws://localhost:5000/ws";
+    console.log("🔌 Connecting to WebSocket:", url);
     wsClient.connectWebSocket(url);
+    
     const unsubscribe = wsClient.subscribeWebSocket(({ header, body }) => {
+      console.log("🔄 OverlayScreen received WebSocket update:", { header, body });
+      console.log("📝 Setting header to:", header);
+      console.log("📝 Setting body to:", body);
+      hasRealtimeRef.current = true;
       setHeader(header);
       setBody(body);
     });
 
-    let stopped = false;
-
-    async function run() {
-      try {
-        // Trigger popup for current step
-        await startStep();
-
-        // Loop: every 10s send screenshot; backend will compare and advance
-        while (!stopped) {
-          await new Promise((r) => setTimeout(r, 10000));
-          const resp = await sendScreenshot();
-          const d = resp?.data || {};
-          if (d.lesson_completed) break;
-          // if d.completed === true, backend advanced; continue
-          // if false, wait and retry
+    // Also subscribe to IPC fallback if available
+    let removeIpc = null;
+    if (window.electronAPI && window.electronAPI.onOverlaySetContent) {
+      const ipcHandler = (payload) => {
+        try {
+          const h = (payload && (payload.header || payload.title)) || "Step";
+          const b = (payload && (payload.body || payload.message)) || "";
+          console.log("🔄 OverlayScreen received IPC update:", { header: h, body: b });
+          setHeader(h);
+          setBody(b);
+        } catch (e) {
+          console.error("IPC content handler error:", e);
         }
-      } catch (e) {
-        console.error("Progress loop error:", e);
-      }
+      };
+      window.electronAPI.onOverlaySetContent(ipcHandler);
+      removeIpc = () => {
+        try { window.electronAPI.onOverlaySetContent(() => {}); } catch (_e) {}
+      };
     }
 
-    run();
-
     return () => {
+      console.log("🧹 Cleaning up WebSocket connection");
       unsubscribe();
       wsClient.disconnectWebSocket();
-      stopped = true;
+      if (removeIpc) removeIpc();
     };
   }, []);
 

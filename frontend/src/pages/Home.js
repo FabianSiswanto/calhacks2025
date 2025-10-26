@@ -1,8 +1,10 @@
 import React, { useState } from "react";
 import "./Home.css";
+import connect from "./connect.js";
 
 const Home = () => {
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [isRunning, setIsRunning] = useState(false);
 
   const handleSubmit = () => {
     setIsSubmitted(true);
@@ -17,6 +19,18 @@ const Home = () => {
       }
     } else {
       console.error("Not running in Electron environment");
+    }
+  };
+
+  const handleStartLearning = async () => {
+    setIsRunning(true);
+    try {
+      await connect();
+      console.log("Learning flow completed!");
+    } catch (error) {
+      console.error("Error running learning flow:", error);
+    } finally {
+      setIsRunning(false);
     }
   };
 
@@ -85,6 +99,7 @@ const Home = () => {
             zIndex: 1000,
             display: "flex",
             justifyContent: "center",
+            gap: "20px",
           }}>
           <button
             onClick={handleTriggerChildProcess}
@@ -111,6 +126,37 @@ const Home = () => {
               e.target.style.transform = "scale(1)";
             }}>
             Start
+          </button>
+          <button
+            onClick={handleStartLearning}
+            disabled={isRunning}
+            style={{
+              height: 72,
+              padding: "0 80px",
+              borderRadius: 40,
+              border: "none",
+              background: isRunning ? "#9ca3af" : "#10b981",
+              color: "#ffffff",
+              fontWeight: 600,
+              fontSize: 20,
+              cursor: isRunning ? "not-allowed" : "pointer",
+              boxShadow: "0 4px 12px rgba(16, 185, 129, 0.3)",
+              transition: "all 0.2s ease",
+              fontFamily: "inherit",
+            }}
+            onMouseEnter={(e) => {
+              if (!isRunning) {
+                e.target.style.background = "#059669";
+                e.target.style.transform = "scale(1.05)";
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!isRunning) {
+                e.target.style.background = "#10b981";
+                e.target.style.transform = "scale(1)";
+              }
+            }}>
+            {isRunning ? "Learning..." : "Test Learning Flow"}
           </button>
         </div>
       </div>

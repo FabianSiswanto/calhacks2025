@@ -9,12 +9,169 @@ const {
 const path = require("path");
 const { spawn } = require("child_process");
 const mouseHook = require("mac-mouse-hook");
+const { io } = require("socket.io-client");
 
 let mainWindow;
 let overlayWindow = null; // Track the overlay window
 
 // Mouse hook state
 let isMouseHookActive = false;
+
+// Service processes
+let backendProcess = null;
+let frontendProcess = null;
+let overlayProcess = null;
+
+// Service management functions
+function startBackendService() {
+  if (backendProcess) {
+    console.log("Backend service already running");
+    return;
+  }
+
+  console.log("Starting backend service...");
+  backendProcess = spawn(path.join(__dirname, "backend/venv/bin/python"), ["backend/app.py"], {
+    cwd: __dirname,
+    env: { ...process.env, PYTHONPATH: path.join(__dirname, "backend") },
+    stdio: ["pipe", "pipe", "pipe"]
+  });
+
+  backendProcess.stdout.on("data", (data) => {
+    try {
+      console.log(`Backend: ${data}`);
+    } catch (e) {
+      // Ignore EPIPE errors when process exits
+    }
+  });
+
+  backendProcess.stderr.on("data", (data) => {
+    try {
+      console.error(`Backend Error: ${data}`);
+    } catch (e) {
+      // Ignore EPIPE errors when process exits
+    }
+  });
+
+  backendProcess.on("close", (code) => {
+    console.log(`Backend process exited with code ${code}`);
+    backendProcess = null;
+  });
+
+  // Wait a moment for backend to start
+  return new Promise((resolve) => {
+    setTimeout(resolve, 2000);
+  });
+}
+
+function startFrontendService() {
+  if (frontendProcess) {
+    console.log("Frontend service already running");
+    return;
+  }
+
+  console.log("Starting frontend service...");
+  frontendProcess = spawn("npm", ["start"], {
+    cwd: path.join(__dirname, "frontend"),
+    stdio: ["pipe", "pipe", "pipe"]
+  });
+
+  frontendProcess.stdout.on("data", (data) => {
+    try {
+      console.log(`Frontend: ${data}`);
+    } catch (e) {
+      // Ignore EPIPE errors when process exits
+    }
+  });
+
+  frontendProcess.stderr.on("data", (data) => {
+    try {
+      console.error(`Frontend Error: ${data}`);
+    } catch (e) {
+      // Ignore EPIPE errors when process exits
+    }
+  });
+
+  frontendProcess.on("close", (code) => {
+    console.log(`Frontend process exited with code ${code}`);
+    frontendProcess = null;
+  });
+
+  // Wait for React dev server to start
+  return new Promise((resolve) => {
+    setTimeout(resolve, 5000);
+  });
+}
+
+function startOverlayService() {
+  if (overlayProcess) {
+    console.log("Overlay service already running");
+    return;
+  }
+
+  console.log("Starting overlay service...");
+  overlayProcess = spawn("npm", ["start"], {
+    cwd: path.join(__dirname, "overlay-screen"),
+    stdio: ["pipe", "pipe", "pipe"]
+  });
+
+  overlayProcess.stdout.on("data", (data) => {
+    try {
+      console.log(`Overlay: ${data}`);
+    } catch (e) {
+      // Ignore EPIPE errors when process exits
+    }
+  });
+
+  overlayProcess.stderr.on("data", (data) => {
+    try {
+      console.error(`Overlay Error: ${data}`);
+    } catch (e) {
+      // Ignore EPIPE errors when process exits
+    }
+  });
+
+  overlayProcess.on("close", (code) => {
+    console.log(`Overlay process exited with code ${code}`);
+    overlayProcess = null;
+  });
+
+  // Wait for React dev server to start
+  return new Promise((resolve) => {
+    setTimeout(resolve, 5000);
+  });
+}
+
+async function startAllServices() {
+  console.log("Starting all services...");
+  
+  try {
+    await startBackendService();
+    await startFrontendService();
+    await startOverlayService();
+    console.log("All services started successfully!");
+  } catch (error) {
+    console.error("Error starting services:", error);
+  }
+}
+
+function stopAllServices() {
+  console.log("Stopping all services...");
+  
+  if (backendProcess) {
+    backendProcess.kill();
+    backendProcess = null;
+  }
+  
+  if (frontendProcess) {
+    frontendProcess.kill();
+    frontendProcess = null;
+  }
+  
+  if (overlayProcess) {
+    overlayProcess.kill();
+    overlayProcess = null;
+  }
+}
 
 // Overlay screen function triggered by '/' key - creates a new Electron window
 function triggerOverlayScreen() {
@@ -94,18 +251,29 @@ function triggerOverlayScreen() {
   overlayWindow.webContents.once("did-finish-load", () => {
     overlayWindow.show();
     console.log("Overlay window opened");
+    
+    // Open devtools automatically in development
+    if (!app.isPackaged) {
+      overlayWindow.webContents.openDevTools();
+    }
 
-    // Send initial content to overlay renderer
-    overlayWindow.webContents.send("overlay-set-content", {
-      header: "Step 1",
-      body: "Using prototyping features to connect frames, add interactions, and create clickable mockups that simulate user flows.",
-    });
+    // Start WebSocket → IPC bridge so overlay receives messages via IPC too
+    startOverlayIpcBridge();
   });
 
   // Handle overlay window closed
   overlayWindow.on("closed", () => {
     console.log("Overlay window closed");
     overlayWindow = null; // Reset the reference when closed
+
+    // Tear down bridge socket if active
+    if (global.__overlaySocket) {
+      try {
+        global.__overlaySocket.removeAllListeners();
+        global.__overlaySocket.disconnect();
+      } catch (_e) {}
+      global.__overlaySocket = null;
+    }
   });
 
   // Send message to main window that overlay was created
@@ -117,6 +285,63 @@ function triggerOverlayScreen() {
   }
 
   return overlayWindow;
+}
+
+// Socket.IO → IPC bridge: forwards backend popup_message events to overlay renderer
+function startOverlayIpcBridge() {
+  try {
+    // Avoid duplicate connections
+    if (global.__overlaySocket && global.__overlaySocket.connected) {
+      return;
+    }
+
+    const baseUrl = "http://localhost:5000";
+    const socket = io(baseUrl, {
+      transports: ["polling"],
+      withCredentials: false,
+      timeout: 10000,
+      reconnection: true,
+      reconnectionAttempts: 3,
+      reconnectionDelay: 1000,
+    });
+
+    socket.on("connect", () => {
+      console.log("Overlay IPC bridge connected:", socket.id);
+      // Join the same room used by overlay
+      socket.emit("join_user_room", { user_id: "overlay-user" }, (resp) => {
+        console.log("join_user_room (bridge) resp:", resp);
+      });
+    });
+
+    socket.on("popup_message", (data) => {
+      const payload = {
+        header: (data && (data.header || data.title)) || "Step",
+        body: (data && (data.body || data.message)) || "",
+        raw: data,
+      };
+      console.log("Bridge received popup_message; forwarding via IPC:", payload);
+      if (overlayWindow && !overlayWindow.isDestroyed()) {
+        overlayWindow.webContents.send("overlay-set-content", payload);
+      }
+    });
+
+    socket.on("status", (data) => {
+      console.log("Bridge status:", data);
+    });
+
+    socket.on("disconnect", () => {
+      console.log("Overlay IPC bridge disconnected");
+    });
+
+    socket.on("connect_error", (err) => {
+      console.warn("Overlay IPC bridge connect_error:", err && err.message);
+      // Don't spam errors - this is expected during development
+    });
+
+    global.__overlaySocket = socket;
+  } catch (error) {
+    console.error("Failed to start Overlay IPC bridge:", error);
+  }
 }
 
 // Mouse hook functions
@@ -190,7 +415,10 @@ function triggerDebugAction(lastEvent) {
   }
 }
 
-function createWindow() {
+async function createWindow() {
+  // Start all services first
+  await startAllServices();
+
   // Create the browser window
   mainWindow = new BrowserWindow({
     width: 1200,
@@ -206,8 +434,6 @@ function createWindow() {
     icon: path.join(__dirname, "assets/icon.png"), // Optional: add an icon
     show: false, // Don't show until ready
   });
-
-  // Backend is managed externally; no backend process started here
 
   // Load the React app
   const isDev = !app.isPackaged;
@@ -274,6 +500,9 @@ app.on("window-all-closed", () => {
   // Unregister all global shortcuts
   globalShortcut.unregisterAll();
 
+  // Stop all services
+  stopAllServices();
+
   // On macOS, keep app running even when all windows are closed
   if (process.platform !== "darwin") {
     app.quit();
@@ -292,6 +521,9 @@ app.on("before-quit", () => {
     overlayWindow.close();
     overlayWindow = null;
   }
+
+  // Stop all services
+  stopAllServices();
 });
 
 // Security: Prevent new window creation
@@ -303,9 +535,23 @@ app.on("web-contents-created", (event, contents) => {
 });
 
 // IPC handlers for communication with renderer process
-ipcMain.handle("get-backend-status", () => ({ isRunning: false }));
+ipcMain.handle("get-backend-status", () => ({ 
+  isRunning: backendProcess !== null,
+  pid: backendProcess ? backendProcess.pid : null
+}));
 
-ipcMain.handle("restart-backend", () => ({ success: false }));
+ipcMain.handle("restart-backend", async () => {
+  try {
+    if (backendProcess) {
+      backendProcess.kill();
+      backendProcess = null;
+    }
+    await startBackendService();
+    return { success: true, pid: backendProcess ? backendProcess.pid : null };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
 
 // IPC handler to trigger overlay screen from renderer
 ipcMain.handle("trigger-child-process", () => {

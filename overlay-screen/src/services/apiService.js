@@ -3,7 +3,7 @@ import axios from 'axios';
 // Create axios instance with base configuration
 const api = axios.create({
   baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5000',
-  timeout: 10000,
+  timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -77,12 +77,17 @@ export const sendScreenshot = async () => {
   }
 };
 
-// Start current step: triggers popup and sets server state
-export const startStep = async (data = {}) => {
+// Start step endpoint
+export const startStep = async () => {
   try {
-    const response = await api.post('/api/start-step', data);
+    const response = await api.post('/api/start-step', {
+      user_id: 'overlay-user',
+      lesson_id: null,
+      step_order: null
+    });
     return response;
   } catch (error) {
+    console.error('Error starting step:', error);
     throw error;
   }
 };

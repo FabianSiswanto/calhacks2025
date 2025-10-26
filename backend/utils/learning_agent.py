@@ -51,9 +51,31 @@ def handle_screenshot_event(user_id: str, lesson_id: int, step_order: int, base6
     try:
         # Ensure lesson data is cached
         lesson_data = _ensure_lesson_loaded(lesson_id)
-        if not lesson_data or step_order not in lesson_data:
-            logger.warning(f"Lesson {lesson_id} or step {step_order} not found")
-            return {"completed": False, "error": "Lesson or step not found"}
+        if not lesson_data:
+            logger.warning(f"Lesson {lesson_id} not found, trying to find first lesson with steps")
+            # Try to find the first lesson that has steps
+            try:
+                from .database_context import DatabaseContextProvider
+                db_context = DatabaseContextProvider()
+                lessons_resp = db_context.sb.table("lesson").select("id").order("id").execute()
+                lessons = lessons_resp.data or []
+                
+                for lesson in lessons:
+                    candidate_lesson_id = lesson["id"]
+                    candidate_lesson_data = db_context.get_lesson_steps_batch(candidate_lesson_id)
+                    if candidate_lesson_data:  # If lesson has steps
+                        logger.info(f"Found lesson {candidate_lesson_id} with steps, using that instead")
+                        lesson_id = candidate_lesson_id
+                        lesson_data = candidate_lesson_data
+                        break
+                
+                if not lesson_data:
+                    logger.error("No lessons with steps found in database")
+                    return {"completed": False, "error": "No lessons with steps found"}
+                    
+            except Exception as find_err:
+                logger.error(f"Failed to find lesson with steps: {find_err}")
+                return {"completed": False, "error": "Lesson not found"}
 
         # Update user state
         state = user_state.setdefault(user_id, {"lesson_id": lesson_id, "step_order": step_order, "popup_sent_for_step": False})

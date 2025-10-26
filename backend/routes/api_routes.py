@@ -1,8 +1,59 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, current_app
+from flask_socketio import emit
 import json
 import os
 
 bp = Blueprint('api', __name__, url_prefix='/api')
+
+@bp.route('/start-step', methods=['POST'])
+def start_step():
+    """Start a new step and send popup message to overlay"""
+    try:
+        data = request.get_json() or {}
+        user_id = data.get('user_id', 'default-user')
+        lesson_id = data.get('lesson_id')
+        step_order = data.get('step_order')
+        
+        # Use custom header/body if provided, otherwise use defaults
+        custom_header = data.get('header')
+        custom_body = data.get('body')
+        
+        if custom_header and custom_body:
+            step_data = {
+                "header": custom_header,
+                "body": custom_body,
+            }
+        else:
+            # Default message
+            step_data = {
+                "header": f"Step {step_order or 1}",
+                "body": "Follow the instructions displayed in the overlay to complete this step.",
+            }
+        
+        # Get the active SocketIO instance from current_app
+        socketio = current_app.extensions.get('socketio')
+        print(f"📤 Sending WebSocket message to room '{user_id}': {step_data}")
+        
+        # Emit using Flask-SocketIO's emit method
+        try:
+            # Use namespace parameter to target specific rooms
+            if socketio is None:
+                raise RuntimeError('SocketIO not initialized on current_app')
+            socketio.emit('popup_message', step_data, room=user_id, namespace='/')
+            print(f"✅ WebSocket message sent successfully to room '{user_id}'")
+            print(f"   Message data: {step_data}")
+        except Exception as e:
+            print(f"❌ Error emitting message: {e}")
+            import traceback
+            traceback.print_exc()
+        
+        return jsonify({
+            "status": "success",
+            "message": "Step started successfully",
+            "step_data": step_data
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @bp.route('/test', methods=['GET'])
 def test():

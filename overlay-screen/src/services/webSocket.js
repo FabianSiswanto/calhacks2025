@@ -20,29 +20,64 @@ export function connectWebSocket(url) {
   }
 
   const baseUrl = deriveBaseUrl(url || "http://localhost:5000");
+  console.log("🔌 Connecting to WebSocket:", baseUrl);
+  
   socket = io(baseUrl, {
-    transports: ["websocket", "polling"],
+    transports: ["polling"], // force polling to avoid websocket handshake issues with Werkzeug
     withCredentials: false,
+  });
+
+  // Log all incoming events for debugging
+  socket.onAny((event, ...args) => {
+    try {
+      console.log("📥 onAny:", event, args);
+    } catch (_e) {}
+  });
+
+  // Connection events
+  socket.on("connect", () => {
+    console.log("✅ WebSocket connected:", socket.id);
+    console.log("📤 Emitting join_user_room event for overlay-user");
+    // Join the overlay-user room
+    socket.emit("join_user_room", { user_id: "overlay-user" }, (response) => {
+      console.log("📥 join_user_room response:", response);
+    });
+  });
+
+  socket.on("disconnect", () => {
+    console.log("❌ WebSocket disconnected");
+  });
+
+  socket.on("connect_error", (error) => {
+    console.error("💥 WebSocket connection error:", error);
   });
 
   // Optional connection status event from backend
   socket.on("status", (data) => {
-    // no-op; can be logged if needed
+    console.log("📡 WebSocket status:", data);
   });
 
   // Core popup channel from Flask-SocketIO
   socket.on("popup_message", (data) => {
+    console.log("📨 Received popup_message:", data);
+    console.log("🔍 Listener function exists:", typeof listener === "function");
     if (typeof listener === "function") {
       // Map backend shape -> UI-consumed shape
       const mapped = {
-        header: "Step",
-        body: data?.message || "",
+        header: data?.header || "Step",
+        body: data?.body || data?.message || "",
         raw: data,
       };
+      console.log("🔄 Mapped data:", mapped);
+      console.log("📤 Calling listener with:", mapped);
       try {
         listener(mapped);
-      } catch (_e) {
+        console.log("✅ Listener called successfully");
+      } catch (e) {
+        console.error("❌ Error in listener:", e);
       }
+    } else {
+      console.warn("⚠️ No listener function registered");
     }
   });
 
